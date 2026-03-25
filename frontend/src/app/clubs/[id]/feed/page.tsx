@@ -14,13 +14,15 @@ export default function ClubFeedPage() {
   
   const [sessions, setSessions] = useState<Session[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [newPost, setNewPost] = useState('');
   const [loadingPost, setLoadingPost] = useState(false);
 
   useEffect(() => {
     if (clubId) {
-      apiFetch<Session[]>('/api/sessions').then(setSessions).catch(() => []);
-      apiFetch<Message[]>(`/api/messages/club/${clubId}`).then(m => setMessages(m.reverse())).catch(() => []);
+      apiFetch<Session[]>(`/api/sessions?clubId=${clubId}`).then(setSessions).catch(() => []);
+      apiFetch<Message[]>(`/api/messages/club/${clubId}?type=POST`).then(m => setMessages(m.reverse())).catch(() => []);
+      apiFetch<any[]>(`/api/events/club/${clubId}`).then(setEvents).catch(() => []);
     }
   }, [clubId]);
 
@@ -31,7 +33,7 @@ export default function ClubFeedPage() {
     setLoadingPost(true);
     try {
       const msg = await apiFetch<Message>(`/api/messages/club/${clubId}`, {
-        method: 'POST', body: JSON.stringify({ content: newPost })
+        method: 'POST', body: JSON.stringify({ content: newPost, type: 'POST' })
       });
       setMessages(prev => [msg, ...prev]);
       setNewPost('');
@@ -124,6 +126,23 @@ export default function ClubFeedPage() {
       {/* Right Rail Column */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         
+        {/* Événements */}
+        <div className="k-widget">
+          <h3 className="k-widget-title">ÉVÉNEMENTS À VENIR</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {events.slice(0, 3).map(e => (
+              <div key={e.id} style={{ borderLeft: '3px solid var(--ks-primary)', paddingLeft: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--ks-primary)' }}>
+                  {new Date(e.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).toUpperCase()}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, margin: '2px 0' }}>{e.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--ks-text-muted)' }}>📍 {e.location}</div>
+              </div>
+            ))}
+            {events.length === 0 && <div style={{ fontSize: 13, color: 'var(--ks-text-muted)' }}>Aucun événement.</div>}
+          </div>
+        </div>
+
         {/* Tendances */}
         <div className="k-widget">
           <h3 className="k-widget-title">TENDANCES CLUB</h3>

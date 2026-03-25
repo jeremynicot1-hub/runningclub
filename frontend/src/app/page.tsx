@@ -10,7 +10,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!loading) {
       if (user) {
-        router.replace(user.role === 'COACH' ? '/dashboard/coach' : '/dashboard/athlete');
+        router.replace('/dashboard');
       } else {
         router.replace('/login');
       }

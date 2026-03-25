@@ -11,9 +11,9 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
       include: {
-        club: { select: { id: true, name: true, city: true } },
+        clubs: { select: { id: true, name: true, city: true, primaryColor: true, logo: true } },
         teams: { include: { team: true } }
-      }
+      } as any
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
     const { passwordHash, ...safeUser } = user;
@@ -46,7 +46,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
 router.get('/club/:clubId', authenticate, async (req, res) => {
   try {
     const members = await prisma.user.findMany({
-      where: { clubId: req.params.clubId },
+      where: { clubs: { some: { id: req.params.clubId as string } } } as any,
       select: { id: true, firstName: true, lastName: true, role: true, email: true, license: true }
     });
     res.json(members);

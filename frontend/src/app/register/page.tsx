@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
@@ -12,11 +12,14 @@ export default function RegisterPage() {
   const [step, setStep] = useState(1);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [form, setForm] = useState({
     role: 'ATHLETE' as Role, email: '', password: '', firstName: '', lastName: '',
     sport: 'Athlétisme', license: '', dob: '', height: '', weight: ''
   });
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => { setMounted(true); }, []);
 
   const canNext = form.firstName && form.lastName && form.email && form.password.length >= 6;
 
@@ -55,21 +58,27 @@ export default function RegisterPage() {
                 <p style={{ color: 'var(--text-2)', fontSize: 14 }}>Étape 1 : choisissez votre rôle et vos identifiants</p>
               </div>
 
-              {/* Role picker */}
+              {/* Role picker — rendered only client-side to avoid hydration mismatch */}
+              {mounted && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-                {(['COACH', 'ATHLETE'] as Role[]).map(r => (
-                  <button key={r} onClick={() => upd('role', r)} style={{
-                    padding: '16px 12px', borderRadius: 12, textAlign: 'center',
-                    border: `2px solid ${form.role === r ? 'var(--primary)' : 'var(--border)'}`,
-                    background: form.role === r ? 'var(--primary-light)' : 'var(--surface)',
-                    cursor: 'pointer', transition: 'all 0.15s'
-                  }}>
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>{r === 'COACH' ? '🏋️' : '🏃'}</div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: form.role === r ? 'var(--primary)' : 'var(--text)', marginBottom: 2 }}>{r === 'COACH' ? 'Coach' : 'Athlète'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{r === 'COACH' ? 'Gérer un club' : 'Rejoindre un club'}</div>
-                  </button>
-                ))}
+                {(['COACH', 'ATHLETE'] as Role[]).map(r => {
+                  const isSelected = form.role === r;
+                  return (
+                    <button key={r} type="button" onClick={() => upd('role', r)} style={{
+                      padding: '16px 12px', borderRadius: 12, textAlign: 'center',
+                      border: `2px solid ${isSelected ? '#c02631' : '#e5e7eb'}`,
+                      background: isSelected ? '#fff0f0' : '#ffffff',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                      outline: 'none'
+                    }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>{r === 'COACH' ? '🏋️' : '🏃'}</div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: isSelected ? '#c02631' : '#111111', marginBottom: 2 }}>{r === 'COACH' ? 'Coach' : 'Athlète'}</div>
+                      <div style={{ fontSize: 12, color: '#6b7280' }}>{r === 'COACH' ? 'Gérer un club' : 'Rejoindre un club'}</div>
+                    </button>
+                  );
+                })}
               </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div className="form-group"><label className="form-label">Prénom</label><input className="form-input" value={form.firstName} onChange={e => upd('firstName', e.target.value)} placeholder="Jean" /></div>

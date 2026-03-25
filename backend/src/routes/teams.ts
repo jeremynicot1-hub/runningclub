@@ -8,11 +8,19 @@ const prisma = new PrismaClient();
 // Create team
 router.post('/', authenticate, requireRole('COACH'), async (req: AuthRequest, res) => {
   try {
-    const coach = await prisma.user.findUnique({ where: { id: req.user!.userId } });
-    if (!coach?.clubId) return res.status(400).json({ error: 'Coach must belong to a club' });
-    const { name } = req.body;
+    const { name, clubId } = req.body;
+    if (!clubId) return res.status(400).json({ error: 'clubId is required' });
+    
+    // Verify coach belongs to this club
+    const coach = await prisma.user.findUnique({ 
+      where: { id: req.user!.userId },
+      include: { clubs: { select: { id: true } } } as any
+    });
+    const belongsToClub = (coach as any)?.clubs.some((c: any) => c.id === clubId);
+    if (!belongsToClub) return res.status(403).json({ error: 'You do not have permission to create a team for this club' });
+    
     const team = await prisma.team.create({
-      data: { name, clubId: coach.clubId, coachId: req.user!.userId }
+      data: { name, clubId, coachId: req.user!.userId }
     });
     res.json(team);
   } catch {
@@ -24,7 +32,7 @@ router.post('/', authenticate, requireRole('COACH'), async (req: AuthRequest, re
 router.get('/club/:clubId', authenticate, async (req, res) => {
   try {
     const teams = await prisma.team.findMany({
-      where: { clubId: req.params.clubId },
+      where: { clubId: req.params.clubId as string },
       include: {
         members: { include: { user: { select: { id: true, firstName: true, lastName: true, role: true } } } }
       }
@@ -40,7 +48,7 @@ router.post('/:id/members', authenticate, requireRole('COACH'), async (req: Auth
   try {
     const { userId } = req.body;
     await prisma.teamMember.create({
-      data: { teamId: req.params.id, userId }
+      data: { teamId: req.params.id as string, userId: userId as string }
     });
     res.json({ message: 'Member added' });
   } catch {
@@ -52,7 +60,7 @@ router.post('/:id/members', authenticate, requireRole('COACH'), async (req: Auth
 router.delete('/:id/members/:userId', authenticate, requireRole('COACH'), async (req, res) => {
   try {
     await prisma.teamMember.delete({
-      where: { teamId_userId: { teamId: req.params.id, userId: req.params.userId } }
+      where: { teamId_userId: { teamId: req.params.id as string, userId: req.params.userId as string } }
     });
     res.json({ message: 'Member removed' });
   } catch {

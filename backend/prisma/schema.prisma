@@ -12,6 +12,12 @@ enum Role {
   ATHLETE
 }
 
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -24,19 +30,33 @@ model User {
   dob          DateTime?
   height       Float?
   weight       Float?
+  city         String?
   
   // Relations
-  clubId       String?
-  club         Club?    @relation("ClubMembers", fields: [clubId], references: [id])
+  clubs        Club[]   @relation("ClubMembers")
   ownedClub    Club?    @relation("ClubOwner")
   
   teams        TeamMember[]
   sessions     Session[] @relation("AthleteSessions")
   coachSessions Session[] @relation("CoachSessions")
   messages     Message[]
+  joinRequests ClubJoinRequest[]
   
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model ClubJoinRequest {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  clubId    String
+  club      Club          @relation(fields: [clubId], references: [id])
+  status    RequestStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([userId, clubId])
 }
 
 model Club {
@@ -45,6 +65,11 @@ model Club {
   description String?
   logo        String?
   city        String?
+  address     String?
+  region      String?
+  department  String?
+  website     String?
+  sports      String[] @default([])
   primaryColor String? @default("#FF5A1F")
   bannerImage  String?
   
@@ -55,6 +80,8 @@ model Club {
   teams       Team[]
   messages    Message[]
   events      Event[]
+  joinRequests ClubJoinRequest[]
+  sessions    Session[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -101,8 +128,11 @@ model Session {
   userId         String?
   user           User?    @relation("AthleteSessions", fields: [userId], references: [id])
   
-  coachId        String
-  coach          User     @relation("CoachSessions", fields: [coachId], references: [id])
+  coachId        String?
+  coach          User?    @relation("CoachSessions", fields: [coachId], references: [id])
+  
+  clubId         String?
+  club           Club?    @relation(fields: [clubId], references: [id])
   
   result         SessionResult?
   
@@ -127,6 +157,7 @@ model SessionResult {
 model Message {
   id        String   @id @default(uuid())
   content   String
+  type      String   @default("CHAT")
   
   senderId  String
   sender    User     @relation(fields: [senderId], references: [id])

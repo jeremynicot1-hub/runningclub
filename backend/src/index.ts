@@ -10,6 +10,7 @@ import teamRoutes from './routes/teams.js';
 import sessionRoutes from './routes/sessions.js';
 import userRoutes from './routes/users.js';
 import chatRoutes from './routes/chat.js';
+import eventRoutes from './routes/events.js';
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000'
 }));
 app.use(express.json());
+app.use('/uploads', express.static('uploads'));
 
 // Routes
 app.get('/health', (_req, res) => {
@@ -40,6 +42,7 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', chatRoutes);
+app.use('/api/events', eventRoutes);
 
 // WebSocket for realtime chat
 io.on('connection', (socket) => {
@@ -50,12 +53,17 @@ io.on('connection', (socket) => {
     console.log(`Socket ${socket.id} joined room ${roomId}`);
   });
 
-  socket.on('send-message', async (data: { content: string; senderId: string; clubId: string; senderName: string; senderRole: string }) => {
+  socket.on('send-message', async (data: { content: string; senderId: string; clubId: string; senderName: string; senderRole: string; type?: string }) => {
     try {
       const message = await prisma.message.create({
-        data: { content: data.content, senderId: data.senderId, clubId: data.clubId },
+        data: { 
+          content: data.content, 
+          senderId: data.senderId, 
+          clubId: data.clubId,
+          type: data.type || 'CHAT'
+        },
         include: { sender: { select: { id: true, firstName: true, lastName: true, role: true } } }
-      });
+      } as any);
       io.to(data.clubId).emit('new-message', message);
     } catch (err) {
       console.error('Failed to save message:', err);

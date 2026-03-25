@@ -5,7 +5,7 @@ import { apiFetch } from '@/lib/api';
 
 export default function CreateClubPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: '', description: '', city: '' });
+  const [form, setForm] = useState({ name: '', description: '', city: '', address: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -14,7 +14,7 @@ export default function CreateClubPage() {
     setLoading(true); setError('');
     try {
       const club = await apiFetch<any>('/api/clubs', { method: 'POST', body: JSON.stringify(form) });
-      router.push(`/clubs/${club.id}/feed`);
+      window.location.href = `/clubs/${club.id}/feed`;
     } catch (err: any) { 
       setError(err?.message || 'Erreur lors de la création'); 
     } finally { 
@@ -42,6 +42,11 @@ export default function CreateClubPage() {
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Ville</label>
             <input type="text" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Ex: Lyon" style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--ks-border)', background: 'var(--ks-bg)', fontSize: 14 }} />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Adresse complète du club *</label>
+            <input type="text" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Ex: 27 Rue des Sports, 69000 Lyon" required style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--ks-border)', background: 'var(--ks-bg)', fontSize: 14 }} />
           </div>
           
           <div>
