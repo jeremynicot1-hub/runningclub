@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  COACH
+  ATHLETE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(ATHLETE)
+  firstName    String
+  lastName     String
+  sport        String   @default("Athletics")
+  license      String?
+  dob          DateTime?
+  height       Float?
+  weight       Float?
+  
+  // Relations
+  clubId       String?
+  club         Club?    @relation("ClubMembers", fields: [clubId], references: [id])
+  ownedClub    Club?    @relation("ClubOwner")
+  
+  teams        TeamMember[]
+  sessions     Session[] @relation("AthleteSessions")
+  coachSessions Session[] @relation("CoachSessions")
+  messages     Message[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Club {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  logo        String?
+  city        String?
+  primaryColor String? @default("#FF5A1F")
+  bannerImage  String?
+  
+  ownerId     String   @unique
+  owner       User     @relation("ClubOwner", fields: [ownerId], references: [id])
+  
+  members     User[]   @relation("ClubMembers")
+  teams       Team[]
+  messages    Message[]
+  events      Event[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id])
+  
+  coachId   String
+  
+  members   TeamMember[]
+  sessions  Session[]
+  messages  Message[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TeamMember {
+  teamId String
+  userId String
+  
+  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@id([teamId, userId])
+}
+
+model Session {
+  id             String   @id @default(uuid())
+  date           DateTime
+  type           String
+  description    String?
+  duration       Int?
+  targetDistance Float?
+  
+  teamId         String?
+  team           Team?    @relation(fields: [teamId], references: [id])
+  
+  userId         String?
+  user           User?    @relation("AthleteSessions", fields: [userId], references: [id])
+  
+  coachId        String
+  coach          User     @relation("CoachSessions", fields: [coachId], references: [id])
+  
+  result         SessionResult?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model SessionResult {
+  id             String   @id @default(uuid())
+  actualDistance Float?
+  time           Int?
+  rpe            Int?
+  comment        String?
+  
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  
+  clubId    String?
+  club      Club?    @relation(fields: [clubId], references: [id])
+  
+  teamId    String?
+  team      Team?    @relation(fields: [teamId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  name        String
+  date        DateTime
+  location    String?
+  
+  clubId      String
+  club        Club     @relation(fields: [clubId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
