@@ -37,12 +37,13 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// Get messages for a club (optionally filtered by type)
+// Get messages for a club (optionally filtered by type and channel)
 router.get('/club/:clubId', authenticate, async (req, res) => {
   try {
-    const { type } = req.query;
+    const { type, channelId } = req.query;
     const where: any = { clubId: req.params.clubId as string, teamId: null };
     if (type) where.type = type as string;
+    if (channelId) where.channelId = channelId as string;
 
     const messages = await prisma.message.findMany({
       where,
@@ -59,12 +60,13 @@ router.get('/club/:clubId', authenticate, async (req, res) => {
 // Post a message to a club (chat or post)
 router.post('/club/:clubId', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, type } = req.body;
+    const { content, type, channelId } = req.body;
     const message = await prisma.message.create({
       data: { 
         content, 
         senderId: req.user!.userId, 
         clubId: req.params.clubId as string,
+        channelId: channelId,
         type: type || 'CHAT'
       },
       include: { sender: { select: { id: true, firstName: true, lastName: true, role: true } } }

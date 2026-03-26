@@ -4,246 +4,383 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
+import DashboardSidebar from '@/components/DashboardSidebar';
+import Topbar from '@/components/Topbar';
 
 export default function DashboardHub() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const [clubs, setClubs] = useState<any[]>([]);
-  const [userClubs, setUserClubs] = useState<any[]>([]);
-  const [cityFilter, setCityFilter] = useState('');
-  const [pendingRequests, setPendingRequests] = useState<Record<string, boolean>>({});
-  const [joiningId, setJoiningId] = useState<string | null>(null);
-
   const [feed, setFeed] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
+  const [invites, setInvites] = useState<any[]>([]);
+  const [postContent, setPostContent] = useState('');
+  
+  // Modal states
   const [showSessionModal, setShowSessionModal] = useState(false);
-  const [sessionForm, setSessionForm] = useState({ date: new Date().toISOString().split('T')[0], type: 'Course à pied', description: '' });
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [newSession, setNewSession] = useState({ date: new Date().toISOString().split('T')[0], type: 'Course', description: '' });
+  const [inviteEmail, setInviteEmail] = useState('');
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
     if (user) {
-      // Get all clubs for discovery
-      apiFetch<any[]>('/api/clubs').then(data => {
-        setClubs(data);
-        const p: Record<string, boolean> = {};
-        data.forEach(c => { if (c.joinRequests?.length > 0) p[c.id] = true; });
-        setPendingRequests(p);
-      }).catch(() => []);
-      
       apiFetch<any[]>('/api/messages/feed').then(setFeed).catch(console.error);
       apiFetch<any[]>('/api/sessions').then(setSessions).catch(console.error);
       apiFetch<any[]>('/api/events').then(setEvents).catch(console.error);
-      
-      // Get user's own clubs
-      apiFetch<any>(`/api/users/me`).then(u => setUserClubs(u.clubs || [])).catch(console.error);
+      apiFetch<any[]>('/api/invites/received').then(setInvites).catch(console.error);
     }
   }, [user, loading, router]);
 
-  const joinedIds = userClubs.map(c => c.id);
-  const pendingClubsList = clubs.filter(c => pendingRequests[c.id] && !joinedIds.includes(c.id));
-  const availableClubsList = clubs.filter(c => {
-    const matchesCity = !cityFilter.trim() || c.city?.toLowerCase().includes(cityFilter.toLowerCase());
-    return matchesCity && !pendingRequests[c.id] && !joinedIds.includes(c.id);
-  });
+  const handlePost = async () => {
+    if (!postContent.trim() || !user) return;
+    
+    // Default to first club for global feed post
+    const targetClubId = (user as any).clubs?.[0]?.id;
+    if (!targetClubId) {
+      alert("You must be a member of a club to post.");
+      return;
+    }
 
-  const requestJoin = async (clubId: string) => {
-    setJoiningId(clubId);
     try {
-      const res = await apiFetch<any>(`/api/clubs/${clubId}/join`, { method: 'POST' });
-      if (res.request?.status === 'PENDING') {
-        setPendingRequests(prev => ({ ...prev, [clubId]: true }));
-      } else {
-        window.location.reload();
-      }
-    } catch {
-      alert('Erreur lors de l\'envoi de la demande.');
-    } finally {
-      setJoiningId(null);
+      await apiFetch(`/api/messages/club/${targetClubId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content: postContent.trim(),
+          type: 'POST'
+        })
+      });
+      setPostContent('');
+      const newFeed = await apiFetch<any[]>('/api/messages/feed');
+      setFeed(newFeed);
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const createPersonalSession = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
+  const handleCreatePersonalSession = async () => {
     try {
       await apiFetch('/api/sessions', {
         method: 'POST',
-        body: JSON.stringify({ ...sessionForm, userId: user.id })
+        body: JSON.stringify({
+          ...newSession,
+          userId: user.id
+        })
       });
       setShowSessionModal(false);
       apiFetch<any[]>('/api/sessions').then(setSessions);
-    } catch {
-      alert('Erreur lors de la création de la séance.');
+    } catch (err) {
+      console.error(err);
     }
   };
+
+  const handleInvite = async () => {
+    if (!selectedSessionId || !inviteEmail) return;
+    try {
+      await apiFetch('/api/invites', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: selectedSessionId,
+          receiverEmail: inviteEmail
+        })
+      });
+      setShowInviteModal(false);
+      setInviteEmail('');
+      alert("Invitation envoyée !");
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'envoi de l'invitation.");
+    }
+  };
+
+  const handleInviteResponse = async (inviteId: string, status: 'APPROVED' | 'REJECTED') => {
+    try {
+      await apiFetch(`/api/invites/${inviteId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+      });
+      apiFetch<any[]>('/api/invites/received').then(setInvites);
+      apiFetch<any[]>('/api/sessions').then(setSessions);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const getSessionColor = (session: any) => {
+    if (session.clubId) return 'var(--ks-primary)'; // Club = Orange
+    if (session.userId === user.id && !session.invites?.length) return '#3b82f6'; // Perso = Bleu
+    return '#10b981'; // Shared = Vert
+  };
+
+  const daysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
+  
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
   if (loading || !user) return null;
 
   return (
     <div className="kinetic-app">
-      <aside className="kinetic-sidebar" style={{ background: '#0f172a', borderRight: 'none' }}>
-        <div className="kinetic-logo" style={{ flexDirection: 'column', alignItems: 'flex-start', padding: '24px' }}>
-          <div className="kinetic-logo-main" style={{ fontSize: 22, color: 'white' }}>KINETIC</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ks-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personnel</div>
-        </div>
-        <nav style={{ flex: 1, padding: '12px 0' }}>
-          <div className="kinetic-nav-item active" style={{ color: 'white', background: 'rgba(255,255,255,0.05)' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-            Mon Accueil
-          </div>
-          <div className="kinetic-nav-item" onClick={() => router.push('/dashboard/my-club')} style={{ color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Mon Club
-          </div>
-          <div className="kinetic-nav-item" onClick={() => router.push('/dashboard/map')} style={{ color: 'rgba(255,255,255,0.6)', cursor: 'pointer' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0-10 10c0 5.5 4.5 10 10 10s10-4.5 10-10a10 10 0 0 0-10-10zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/><circle cx="12" cy="12" r="3"/></svg>
-            Carte des Clubs
-          </div>
-        </nav>
-        <div style={{ padding: '24px' }}>
-          <button onClick={() => { logout(); router.push('/login'); }} className="k-btn" style={{ width: '100%', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>
-            Déconnexion
-          </button>
-        </div>
-      </aside>
+      <DashboardSidebar />
 
       <div className="kinetic-main">
-        <header style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 32px', background: 'white', borderBottom: '1px solid var(--ks-border)' }}>
-          <h2 style={{ fontSize: 16, fontWeight: 800 }}>Espace Personnel · Bonjour, {user.firstName} 👋</h2>
-        </header>
-        <div className="kinetic-content">
-          <main className="kinetic-grid" style={{ gridTemplateColumns: '1fr 340px' }}>
-
-            {/* Colonne Feed Personnel */}
+        <Topbar />
+        
+        <div className="kinetic-content" style={{ padding: '32px 40px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 32, maxWidth: 1200, margin: '0 auto' }}>
+            
+            {/* Left Column: Feed */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              
-              {feed.length > 0 ? (
-                feed.map(msg => (
-                  <div key={msg.id} className="k-post">
-                    <div className="k-post-header" style={{ alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <div className="k-avatar k-avatar-md" style={{ background: msg.sender.role === 'COACH' ? msg.club?.primaryColor || 'var(--ks-primary)' : '#1e293b', color: 'white' }}>
-                          {msg.sender.firstName[0]}{msg.sender.lastName[0]}
+              <div style={{ marginBottom: 8 }}>
+                <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--ks-text-main)', marginBottom: 8 }}>Bonjour, {user?.firstName}</h1>
+                <p style={{ color: 'var(--ks-text-muted)', fontSize: 15 }}>Voici ce qui se passe dans vos cercles athlétiques aujourd&apos;hui.</p>
+              </div>
+
+              {/* Post Creator */}
+              <div className="k-widget" style={{ padding: 20 }}>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                  <div className="k-avatar k-avatar-md" style={{ background: 'var(--ks-primary)', color: 'white', fontWeight: 800 }}>
+                    {user.firstName[0]}
+                  </div>
+                  <textarea 
+                    placeholder="Partagez votre dernier entraînement ou une actualité club..." 
+                    value={postContent}
+                    onChange={(e) => setPostContent(e.target.value)}
+                    style={{ flex: 1, border: 'none', background: 'var(--ks-bg)', borderRadius: 12, padding: 12, fontSize: 14, resize: 'none', height: 100, outline: 'none' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <button style={{ background: 'none', border: 'none', color: 'var(--ks-text-muted)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                      Photo
+                    </button>
+                    <button style={{ background: 'none', border: 'none', color: 'var(--ks-text-muted)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      Parcours
+                    </button>
+                    <button style={{ background: 'none', border: 'none', color: 'var(--ks-text-muted)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                      Stats
+                    </button>
+                  </div>
+                  <button onClick={handlePost} className="k-btn k-btn-primary" style={{ padding: '8px 24px', borderRadius: 20 }}>Publier</button>
+                </div>
+              </div>
+
+              {/* Feed Items */}
+              {feed.map(msg => (
+                <div key={msg.id} className="k-widget" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: 20, display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                    <div className="k-avatar" style={{ width: 40, height: 40, background: msg.club?.primaryColor || 'var(--ks-primary)', color: 'white' }}>
+                      {msg.sender?.firstName ? msg.sender.firstName[0] : '?'}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 800 }}>{msg.sender?.firstName} {msg.sender?.lastName}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ks-text-muted)' }}>{msg.club?.name} • il y a 2h</div>
+                    </div>
+                    </div>
+                    <button style={{ background: 'none', border: 'none', color: 'var(--ks-text-light)' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                    </button>
+                  </div>
+                  <div style={{ padding: '0 20px 20px' }}>
+                    <p style={{ fontSize: 15, lineHeight: 1.5, marginBottom: 16 }}>{msg.content}</p>
+                    <div style={{ width: '100%', height: 300, background: 'var(--ks-bg)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ks-text-light)', border: '1px solid var(--ks-border)' }}>
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                    </div>
+                  </div>
+                  <div style={{ padding: '12px 20px', borderTop: '1px solid var(--ks-border-light)', display: 'flex', gap: 24 }}>
+                    <button style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ks-text-muted)', fontSize: 13, fontWeight: 700 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.84-8.84 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> 24
+                    </button>
+                    <button style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ks-text-muted)', fontSize: 13, fontWeight: 700 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> 8
+                    </button>
+                    <button style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ks-text-muted)', fontSize: 13, fontWeight: 700 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Right Column: Widgets */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {/* Dynamic Calendar */}
+              <div className="k-widget" style={{ padding: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800 }}>{monthNames[currentMonth]} {currentYear}</div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button onClick={() => setShowSessionModal(true)} className="k-btn" style={{ padding: '4px 8px', fontSize: 10, background: 'var(--ks-bg-alt)' }}>+ Séance</button>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ cursor: 'pointer' }}><path d="m15 18-6-6 6-6"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ cursor: 'pointer' }}><path d="m9 18 6-6-6-6"/></svg>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, textAlign: 'center' }}>
+                  {['L','M','M','J','V','S','D'].map((d, i) => <div key={i} style={{ fontSize: 10, fontWeight: 800, color: 'var(--ks-text-light)' }}>{d}</div>)}
+                  
+                  {Array.from({ length: firstDayOfMonth(currentMonth, currentYear) - 1 }).map((_, i) => <div key={`empty-${i}`} />)}
+                  
+                  {Array.from({ length: daysInMonth(currentMonth, currentYear) }).map((_, i) => {
+                    const day = i + 1;
+                    const daySessions = sessions.filter(s => new Date(s.date).getDate() === day && new Date(s.date).getMonth() === currentMonth);
+                    const isToday = day === now.getDate();
+
+                    return (
+                      <div key={day} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ 
+                          fontSize: 12, fontWeight: 700, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8,
+                          background: isToday ? 'var(--ks-bg-alt)' : 'transparent',
+                          color: isToday ? 'inherit' : 'inherit',
+                          marginBottom: 4
+                        }}>
+                          {day}
                         </div>
-                        <div>
-                          <div className="k-post-author">{msg.sender.firstName} {msg.sender.lastName}</div>
-                          <div className="k-post-meta">{new Date(msg.createdAt).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}</div>
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          {daySessions.map(s => (
+                            <div 
+                              key={s.id} 
+                              onClick={() => { setSelectedSessionId(s.id); setShowInviteModal(true); }}
+                              style={{ width: 6, height: 6, borderRadius: '50%', background: getSessionColor(s), cursor: 'pointer' }} 
+                              title={`${s.type}: ${s.description || ''}`}
+                            />
+                          ))}
                         </div>
                       </div>
-                      <Link href={`/clubs/${msg.club.id}/feed`} style={{ textDecoration: 'none' }}>
-                        <span className="k-pill hover-lift" style={{ cursor: 'pointer', background: 'var(--ks-bg)', border: '1px solid var(--ks-border)', color: 'var(--ks-text-main)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: msg.club?.primaryColor || 'var(--ks-primary)' }}></span>
-                          {msg.club.name}
-                        </span>
-                      </Link>
-                    </div>
-                    <p style={{ fontSize: 15, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                    );
+                  })}
+                </div>
+                {/* Legend */}
+                <div style={{ marginTop: 16, display: 'flex', gap: 12, fontSize: 10, fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ks-primary)' }} /> Club</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6' }} /> Perso</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} /> Partagé</div>
+                </div>
+              </div>
+
+              {/* Pending Invitations */}
+              {invites.length > 0 && (
+                <div className="k-widget" style={{ padding: 20, border: '1px solid #10b981', background: 'rgba(16, 185, 129, 0.05)' }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 900, marginBottom: 16, color: '#059669' }}>Invitations à courir</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {invites.map(inv => (
+                      <div key={inv.id} style={{ fontSize: 13 }}>
+                        <div style={{ fontWeight: 800 }}>{inv.sender.firstName} vous invite</div>
+                        <div style={{ fontSize: 11, color: 'var(--ks-text-muted)', marginBottom: 8 }}>
+                          Séance : {inv.session.type} ({new Date(inv.session.date).toLocaleDateString('fr-FR')})
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => handleInviteResponse(inv.id, 'APPROVED')} className="k-btn k-btn-primary" style={{ padding: '4px 12px', fontSize: 11, borderRadius: 6, background: '#10b981' }}>Accepter</button>
+                          <button onClick={() => handleInviteResponse(inv.id, 'REJECTED')} className="k-btn" style={{ padding: '4px 12px', fontSize: 11, borderRadius: 6 }}>Refuser</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))
-              ) : (
-                <div className="k-widget" style={{ padding: 40, textAlign: 'center' }}>
-                  <div style={{ fontSize: 40, marginBottom: 16 }}>🌍</div>
-                  <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 8 }}>Fil d&apos;actualité global</h3>
-                  <p style={{ color: 'var(--ks-text-muted)', fontSize: 13 }}>Le flux de vos clubs apparaîtra ici dès qu&apos;une activité sera publiée.</p>
                 </div>
               )}
 
-            </div>
-
-            {/* Colonne de droite */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-              {/* Mon Agenda Personnel (Global) */}
-              <div className="k-widget">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 className="k-widget-title" style={{ margin: 0 }}>AGENDA PERSONNEL</h3>
-                  <button onClick={() => setShowSessionModal(true)} style={{ fontSize: 11, fontWeight: 800, color: 'var(--ks-primary)', background: 'none', border: 'none', cursor: 'pointer' }}>+ Ajouter</button>
+              {/* Upcoming Events */}
+              <div className="k-widget" style={{ padding: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 900, margin: 0 }}>Événements à venir</h3>
+                  <Link href="/dashboard/events" style={{ fontSize: 11, fontWeight: 800, color: 'var(--ks-primary)', textDecoration: 'none' }}>VOIR TOUT</Link>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {sessions.length > 0 ? sessions.slice(0, 3).map(s => (
-                    <div key={s.id} style={{ display: 'flex', gap: 12, padding: 12, background: 'var(--ks-bg)', borderRadius: 12, border: '1px solid var(--ks-border)' }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--ks-primary)', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <div style={{ fontSize: 10, fontWeight: 800 }}>{new Date(s.date).toLocaleString('fr-FR', { month: 'short' }).toUpperCase()}</div>
-                        <div style={{ fontSize: 16, fontWeight: 900, marginTop: -2 }}>{new Date(s.date).getDate()}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {[
+                    { date: '28 MAR', title: 'Fractionné Piste', time: '06:30', loc: 'Stade Municipal' },
+                    { date: '30 MAR', title: 'Sortie Longue (Zone 2)', time: '07:00', loc: 'Bords de Seine' },
+                    { date: '01 AVR', title: 'Renforcement Musculaire', time: '17:30', loc: 'Salle de Fitness' },
+                  ].map((ev, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 16 }}>
+                      <div style={{ width: 44, height: 44, background: 'var(--ks-bg)', border: '1px solid var(--ks-border)', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <div style={{ fontSize: 8, fontWeight: 800, color: 'var(--ks-text-light)' }}>{ev.date.split(' ')[1]}</div>
+                        <div style={{ fontSize: 14, fontWeight: 900 }}>{ev.date.split(' ')[0]}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 800 }}>{s.type}</div>
-                        <div style={{ fontSize: 11, color: 'var(--ks-text-muted)', marginTop: 2 }}>
-                          {s.team?.name ? `👥 ${s.team.name}` : '🏃 Séance Perso'}
-                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800 }}>{ev.title}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ks-text-light)', marginTop: 2 }}>{ev.time} • {ev.loc}</div>
                       </div>
                     </div>
-                  )) : (
-                    <div style={{ fontSize: 12, color: 'var(--ks-text-muted)', textAlign: 'center', padding: '12px 0' }}>Aucune séance prévue.</div>
-                  )}
-                  <Link href="/dashboard" style={{ fontSize: 11, fontWeight: 800, color: 'var(--ks-primary)', textDecoration: 'none', textAlign: 'center', display: 'block', marginTop: 8 }}>Voir tout l&apos;agenda →</Link>
-                </div>
-              </div>
-
-              {/* Prochains Événements (Global) */}
-              <div className="k-widget">
-                <h3 className="k-widget-title">ÉVÉNEMENTS CLUBS</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {events.length > 0 ? events.slice(0, 3).map(e => (
-                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--ks-bg)', borderRadius: 12, border: '1px solid var(--ks-border)' }}>
-                       <div style={{ width: 4, height: 24, borderRadius: 2, background: 'var(--ks-primary)' }}></div>
-                       <div style={{ flex: 1 }}>
-                         <div style={{ fontSize: 13, fontWeight: 800 }}>{e.name}</div>
-                         <div style={{ fontSize: 11, color: 'var(--ks-text-muted)', marginTop: 2 }}>📅 {new Date(e.date).toLocaleDateString()} · {e.location}</div>
-                       </div>
-                    </div>
-                  )) : (
-                    <div style={{ fontSize: 12, color: 'var(--ks-text-muted)', textAlign: 'center', padding: '12px 0' }}>Aucun événement à venir.</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Mes Clubs Quick Access */}
-              <div className="k-widget">
-                <h3 className="k-widget-title">MES CLUBS</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {userClubs.map(club => (
-                    <Link key={club.id} href={`/clubs/${club.id}/feed`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit' }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 8, background: club.primaryColor || 'var(--ks-primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 12, overflow: 'hidden' }}>
-                        {club.logo ? <img src={`http://localhost:5000${club.logo}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : club.name[0]}
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{club.name}</div>
-                    </Link>
                   ))}
-                  <button onClick={() => router.push('/dashboard/my-club')} className="k-btn" style={{ width: '100%', padding: '8px', fontSize: 11, marginTop: 8 }}>Gérer mes clubs</button>
+                  <button className="k-btn" style={{ width: '100%', marginTop: 8, padding: '10px', fontSize: 12, borderRadius: 10 }}>Gérer mon agenda</button>
+                </div>
+              </div>
+
+              {/* Performance Pulse Dark Widget */}
+              <div className="k-widget" style={{ padding: 20, background: 'var(--ks-black-card)', color: 'white', border: 'none' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16, opacity: 0.9 }}>Performance Pulse</h3>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                    <span>Objectif Hebdo</span>
+                    <span style={{ color: 'var(--ks-primary)' }}>85%</span>
+                  </div>
+                  <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: '85%', background: 'var(--ks-primary)' }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 4 }}>Temps de Training Total</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, fontStyle: 'italic' }}>12h 45m</div>
                 </div>
               </div>
 
             </div>
-          </main>
+          </div>
         </div>
-      </div>
 
-      {/* Modal Création Séance Perso */}
-      {showSessionModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
-          <form className="k-widget" onSubmit={createPersonalSession} style={{ width: '100%', maxWidth: 400, gap: 20, display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ fontSize: 18, fontWeight: 900, marginBottom: -8 }}>Nouvelle séance perso</h3>
-            <div className="k-field">
-              <label style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Date</label>
-              <input type="date" className="k-input" value={sessionForm.date} onChange={e => setSessionForm({...sessionForm, date: e.target.value})} required />
+        {/* Modal: Nouvelle Séance */}
+        {showSessionModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div className="k-widget" style={{ width: '100%', maxWidth: 400, padding: 24 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 20 }}>Nouvelle Séance Perso</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: 'var(--ks-text-muted)', marginBottom: 4 }}>Date</label>
+                  <input type="date" value={newSession.date} onChange={(e) => setNewSession({...newSession, date: e.target.value})} style={{ width: '100%', padding: 10, borderRadius: 8, background: 'var(--ks-bg)', border: '1px solid var(--ks-border)', color: 'inherit' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: 'var(--ks-text-muted)', marginBottom: 4 }}>Type</label>
+                  <input type="text" placeholder="Ex: Course, Musculation..." value={newSession.type} onChange={(e) => setNewSession({...newSession, type: e.target.value})} style={{ width: '100%', padding: 10, borderRadius: 8, background: 'var(--ks-bg)', border: '1px solid var(--ks-border)', color: 'inherit' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: 'var(--ks-text-muted)', marginBottom: 4 }}>Description</label>
+                  <textarea placeholder="Détails de la séance..." value={newSession.description} onChange={(e) => setNewSession({...newSession, description: e.target.value})} style={{ width: '100%', padding: 10, borderRadius: 8, background: 'var(--ks-bg)', border: '1px solid var(--ks-border)', color: 'inherit', height: 80, resize: 'none' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                  <button onClick={handleCreatePersonalSession} className="k-btn k-btn-primary" style={{ flex: 1 }}>Enregistrer</button>
+                  <button onClick={() => setShowSessionModal(false)} className="k-btn" style={{ flex: 1 }}>Annuler</button>
+                </div>
+              </div>
             </div>
-            <div className="k-field">
-              <label style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Type d&apos;activité</label>
-              <input type="text" className="k-input" value={sessionForm.type} onChange={e => setSessionForm({...sessionForm, type: e.target.value})} placeholder="Ex: Musculation, Natation..." required />
+          </div>
+        )}
+
+        {/* Modal: Inviter à courir */}
+        {showInviteModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div className="k-widget" style={{ width: '100%', maxWidth: 400, padding: 24 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 8 }}>Inviter un membre</h2>
+              <p style={{ fontSize: 13, color: 'var(--ks-text-muted)', marginBottom: 20 }}>Partagez cette séance avec un autre athlète pour courir ensemble.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: 'var(--ks-text-muted)', marginBottom: 4 }}>Email de l&apos;athlète</label>
+                  <input type="email" placeholder="email@exemple.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} style={{ width: '100%', padding: 10, borderRadius: 8, background: 'var(--ks-bg)', border: '1px solid var(--ks-border)', color: 'inherit' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                  <button onClick={handleInvite} className="k-btn k-btn-primary" style={{ flex: 1 }}>Envoyer l&apos;invitation</button>
+                  <button onClick={() => setShowInviteModal(false)} className="k-btn" style={{ flex: 1 }}>Annuler</button>
+                </div>
+              </div>
             </div>
-            <div className="k-field">
-              <label style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Description / Notes</label>
-              <textarea className="k-input" value={sessionForm.description} onChange={e => setSessionForm({...sessionForm, description: e.target.value})} rows={3} placeholder="Détails de votre entraînement..." />
-            </div>
-            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-              <button type="button" className="k-btn" onClick={() => setShowSessionModal(false)} style={{ flex: 1 }}>Annuler</button>
-              <button type="submit" className="k-btn k-btn-primary" style={{ flex: 1 }}>Enregistrer</button>
-            </div>
-          </form>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

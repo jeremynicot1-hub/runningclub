@@ -25,9 +25,9 @@ const upload = multer({ storage });
 // Create a club (coach only)
 router.post('/', authenticate, requireRole('COACH'), async (req: AuthRequest, res) => {
   try {
-    const { name, description, city, address } = req.body;
+    const { name, description, city, address, lat, lng } = req.body;
     const club = await prisma.club.create({
-      data: { name, description, city, address, ownerId: req.user!.userId } as any
+      data: { name, description, city, address, lat, lng, ownerId: req.user!.userId } as any
     });
     // Multi-club: connect user to this new club they created
     await prisma.user.update({ 
@@ -48,7 +48,9 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
       include: {
         members: { select: { id: true, firstName: true, lastName: true, role: true, email: true, city: true } },
         teams: true,
+        channels: true,
         events: true,
+        sessions: true,
         joinRequests: {
           where: { status: 'PENDING' },
           include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } }
@@ -71,6 +73,7 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       select: { 
         id: true, name: true, city: true, address: true, region: true, department: true, 
         logo: true, description: true, primaryColor: true, website: true, sports: true,
+        lat: true, lng: true, schedule: true,
         _count: { select: { members: true } },
         joinRequests: {
           where: { userId: req.user!.userId, status: 'PENDING' }
@@ -187,10 +190,10 @@ router.put('/:id/settings', authenticate, requireRole('COACH'), async (req: Auth
     if (!club) return res.status(404).json({ error: 'Club not found' });
     if (club.ownerId !== req.user!.userId) return res.status(403).json({ error: 'Only the owner can edit club settings' });
     
-    const { name, description, city, address, website, sports, region, department, logo, primaryColor, bannerImage } = req.body;
+    const { name, description, city, address, website, sports, region, department, logo, primaryColor, bannerImage, lat, lng } = req.body;
     const updated = await prisma.club.update({
       where: { id: req.params.id as string },
-      data: { name, description, city, address, website, sports, region, department, logo, primaryColor, bannerImage } as any
+      data: { name, description, city, address, website, sports, region, department, logo, primaryColor, bannerImage, lat, lng } as any
     });
     res.json(updated);
   } catch {

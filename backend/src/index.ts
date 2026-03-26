@@ -11,6 +11,7 @@ import sessionRoutes from './routes/sessions.js';
 import userRoutes from './routes/users.js';
 import chatRoutes from './routes/chat.js';
 import eventRoutes from './routes/events.js';
+import inviteRoutes from './routes/invites.js';
 
 dotenv.config();
 
@@ -43,6 +44,7 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', chatRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/invites', inviteRoutes);
 
 // WebSocket for realtime chat
 io.on('connection', (socket) => {
@@ -53,18 +55,21 @@ io.on('connection', (socket) => {
     console.log(`Socket ${socket.id} joined room ${roomId}`);
   });
 
-  socket.on('send-message', async (data: { content: string; senderId: string; clubId: string; senderName: string; senderRole: string; type?: string }) => {
+  socket.on('send-message', async (data: { content: string; senderId: string; clubId: string; channelId?: string; senderName: string; senderRole: string; type?: string }) => {
     try {
       const message = await prisma.message.create({
         data: { 
           content: data.content, 
           senderId: data.senderId, 
           clubId: data.clubId,
+          channelId: data.channelId,
           type: data.type || 'CHAT'
         },
         include: { sender: { select: { id: true, firstName: true, lastName: true, role: true } } }
       } as any);
-      io.to(data.clubId).emit('new-message', message);
+      
+      const targetRoom = data.channelId ? `channel:${data.channelId}` : data.clubId;
+      io.to(targetRoom).emit('new-message', message);
     } catch (err) {
       console.error('Failed to save message:', err);
     }

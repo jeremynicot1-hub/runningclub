@@ -10,6 +10,7 @@ interface User {
   firstName: string;
   lastName: string;
   clubId?: string | null;
+  clubs?: any[];
 }
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -39,24 +41,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchUser = async (isMounted = true) => {
+    const token = getToken();
+    if (!token) {
+      if (isMounted) setLoading(false);
+      return;
+    }
+    try {
+      const u = await apiFetch<User>('/api/users/me');
+      if (isMounted) setUser(u);
+    } catch (err: any) {
+      console.error('Session error:', err.message);
+      removeToken();
+      if (isMounted) setUser(null);
+    } finally {
+      if (isMounted) setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-    const fetchUser = async () => {
-      const token = getToken();
-      if (!token) {
-        if (isMounted) setLoading(false);
-        return;
-      }
-      try {
-        const u = await apiFetch<User>('/api/users/me');
-        if (isMounted) setUser(u);
-      } catch {
-        removeToken();
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-    fetchUser();
+    fetchUser(isMounted);
     return () => { isMounted = false; };
   }, []);
 
@@ -66,7 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     setToken(data.token);
-    setUser(data.user);
+    // Explicitly re-fetch to get clubs and full profile
+    await fetchUser();
   };
 
   const register = async (formData: RegisterData) => {
@@ -75,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify(formData),
     });
     setToken(data.token);
-    setUser(data.user);
+    await fetchUser();
   };
 
   const logout = () => {
@@ -83,8 +89,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    await fetchUser();
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

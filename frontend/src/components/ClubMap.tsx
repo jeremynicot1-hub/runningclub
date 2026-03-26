@@ -1,12 +1,10 @@
-'use client';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useState } from 'react';
+import L from 'leaflet';
+import { useEffect } from 'react';
 
-// Fix for icon issues in Leaflet
+// FIX: Leaflet icons (known issue with Next.js)
 const icon = L.icon({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
   iconSize: [25, 41],
@@ -20,46 +18,93 @@ interface Club {
   address: string;
   logo?: string;
   primaryColor?: string;
+  lat?: number;
+  lng?: number;
 }
 
-export default function ClubMap({ clubs, onSelect }: { clubs: Club[], onSelect?: (club: Club) => void }) {
-  const [points, setPoints] = useState<any[]>([]);
+// Child component to handle map events and report visible markers
+function BoundsHandler({ clubs, onBoundsChange }: { clubs: Club[], onBoundsChange?: (ids: string[]) => void }) {
+  const map = useMap();
 
   useEffect(() => {
-    const newPoints = clubs.map((c, i) => {
-      const lat = 45.75 + (Math.random() - 0.5) * 0.15;
-      const lng = 4.85 + (Math.random() - 0.5) * 0.15;
-      return { ...c, lat, lng };
-    });
-    setPoints(newPoints);
-  }, [clubs]);
+    if (!onBoundsChange) return;
+
+    const updateVisible = () => {
+      const bounds = map.getBounds();
+      const visible = clubs
+        .filter(c => {
+          if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return false;
+          return bounds.contains([c.lat, c.lng]);
+        })
+        .map(c => c.id);
+      
+      onBoundsChange(visible);
+    };
+
+    map.on('moveend', updateVisible);
+    // Initial sync and sync on clubs update
+    updateVisible();
+
+    return () => {
+      map.off('moveend', updateVisible);
+    };
+  }, [map, clubs, onBoundsChange]);
+
+  return null;
+}
+
+export default function ClubMap({ 
+  clubs, 
+  onSelect, 
+  onBoundsChange 
+}: { 
+  clubs: Club[], 
+  onSelect?: (club: Club) => void,
+  onBoundsChange?: (visibleIds: string[]) => void
+}) {
+  const center: [number, number] = [46.2276, 2.2137]; // Centre de France
 
   return (
-    <div style={{ height: '500px', width: '100%', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--ks-shadow)' }}>
-      <MapContainer center={[45.76, 4.83]} zoom={12} style={{ height: '100%', width: '100%' }}>
+    <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+      <MapContainer 
+        center={center} 
+        zoom={6} 
+        scrollWheelZoom={true}
+        style={{ height: '100%', width: '100%' }}
+      >
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
-        {points.map(p => (
-          <Marker key={p.id} position={[p.lat, p.lng]} icon={icon} eventHandlers={{ click: () => onSelect?.(p) }}>
-            <Popup>
-              <div style={{ padding: 4 }}>
-                <div style={{ fontWeight: 800, color: p.primaryColor || 'var(--ks-primary)' }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: '#666' }}>📍 {p.address || p.city}</div>
-                <button 
-                  onClick={() => onSelect?.(p)}
-                  style={{ 
-                    fontSize: 11, color: 'white', background: 'var(--ks-primary)', border: 'none', 
-                    fontWeight: 700, marginTop: 8, display: 'block', padding: '4px 8px', borderRadius: 4, cursor: 'pointer' 
-                  }}
-                >
-                  Voir détails
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        
+        <BoundsHandler clubs={clubs} onBoundsChange={onBoundsChange} />
+
+        {clubs.map(p => {
+          if (!p.lat || !p.lng) return null;
+          return (
+            <Marker 
+              key={p.id} 
+              position={[p.lat, p.lng]} 
+              icon={icon} 
+            >
+              <Popup>
+                <div style={{ padding: 4, minWidth: 150 }}>
+                  <div style={{ fontWeight: 800, color: p.primaryColor || 'var(--ks-primary)', fontSize: 14 }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>📍 {p.city}</div>
+                  <button 
+                    onClick={() => onSelect?.(p)}
+                    style={{ 
+                      fontSize: 11, color: 'white', background: 'var(--ks-primary)', border: 'none', 
+                      fontWeight: 700, marginTop: 10, display: 'block', padding: '6px 10px', borderRadius: 6, cursor: 'pointer', width: '100%' 
+                    }}
+                  >
+                    Voir détails
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
     </div>
   );

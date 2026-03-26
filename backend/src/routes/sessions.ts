@@ -57,16 +57,22 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
           where: { id: req.user!.userId },
           include: { 
             clubs: { select: { id: true } },
-            teams: { select: { teamId: true } }
+            teams: { select: { teamId: true } },
+            receivedInvites: { 
+              where: { status: 'APPROVED' },
+              select: { sessionId: true }
+            }
           } as any
         });
         const clubIds = (user as any)?.clubs.map((c: any) => c.id) || [];
         const teamIds = (user as any)?.teams.map((t: any) => t.teamId) || [];
+        const sharedSessionIds = (user as any)?.receivedInvites.map((i: any) => i.sessionId) || [];
         
         where.OR = [
           { userId: req.user!.userId },
           { teamId: { in: teamIds } },
-          { clubId: { in: clubIds } }
+          { clubId: { in: clubIds } },
+          { id: { in: sharedSessionIds } }
         ];
       }
     }

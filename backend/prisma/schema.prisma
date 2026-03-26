@@ -39,8 +39,10 @@ model User {
   teams        TeamMember[]
   sessions     Session[] @relation("AthleteSessions")
   coachSessions Session[] @relation("CoachSessions")
-  messages     Message[]
-  joinRequests ClubJoinRequest[]
+  messages      Message[]
+  joinRequests  ClubJoinRequest[]
+  sentInvites   SessionInvite[] @relation("SentInvites")
+  receivedInvites SessionInvite[] @relation("ReceivedInvites")
   
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -72,6 +74,9 @@ model Club {
   sports      String[] @default([])
   primaryColor String? @default("#FF5A1F")
   bannerImage  String?
+  lat          Float?
+  lng          Float?
+  schedule     String?  // Training sessions schedule
   
   ownerId     String   @unique
   owner       User     @relation("ClubOwner", fields: [ownerId], references: [id])
@@ -79,12 +84,23 @@ model Club {
   members     User[]   @relation("ClubMembers")
   teams       Team[]
   messages    Message[]
+  channels    Channel[]
   events      Event[]
   joinRequests ClubJoinRequest[]
   sessions    Session[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Channel {
+  id        String   @id @default(uuid())
+  name      String
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id])
+  messages  Message[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Team {
@@ -134,10 +150,30 @@ model Session {
   clubId         String?
   club           Club?    @relation(fields: [clubId], references: [id])
   
+  invites        SessionInvite[]
+  
   result         SessionResult?
   
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model SessionInvite {
+  id        String        @id @default(uuid())
+  sessionId String
+  session   Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  senderId  String
+  sender    User          @relation("SentInvites", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId String
+  receiver   User          @relation("ReceivedInvites", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  status    RequestStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([sessionId, receiverId])
 }
 
 model SessionResult {
@@ -165,6 +201,9 @@ model Message {
   clubId    String?
   club      Club?    @relation(fields: [clubId], references: [id])
   
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id])
+  
   teamId    String?
   team      Team?    @relation(fields: [teamId], references: [id])
   
@@ -175,6 +214,7 @@ model Message {
 model Event {
   id          String   @id @default(uuid())
   name        String
+  description String?
   date        DateTime
   location    String?
   
