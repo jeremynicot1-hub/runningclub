@@ -7,171 +7,146 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  COACH
-  ATHLETE
-}
-
-enum RequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(ATHLETE)
-  firstName    String
-  lastName     String
-  sport        String   @default("Athletics")
-  license      String?
-  dob          DateTime?
-  height       Float?
-  weight       Float?
-  city         String?
-  
-  // Relations
-  clubs        Club[]   @relation("ClubMembers")
-  ownedClub    Club?    @relation("ClubOwner")
-  
-  teams        TeamMember[]
-  sessions     Session[] @relation("AthleteSessions")
-  coachSessions Session[] @relation("CoachSessions")
-  messages      Message[]
-  joinRequests  ClubJoinRequest[]
-  sentInvites   SessionInvite[] @relation("SentInvites")
-  receivedInvites SessionInvite[] @relation("ReceivedInvites")
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String            @id @default(uuid())
+  email           String            @unique
+  passwordHash    String
+  role            Role              @default(ATHLETE)
+  firstName       String
+  lastName        String
+  sport           String            @default("Athletics")
+  license         String?
+  dob             DateTime?
+  height          Float?
+  weight          Float?
+  city            String?
+  address         String?
+  profileImage    String?
+  bio             String?
+  pb5k            String?
+  pb10k           String?
+  pb21k           String?
+  pb42k           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  ownedClub       Club?             @relation("ClubOwner")
+  joinRequests    ClubJoinRequest[]
+  messages        Message[]
+  coachSessions   Session[]         @relation("CoachSessions")
+  sessions        Session[]         @relation("AthleteSessions")
+  receivedInvites SessionInvite[]   @relation("ReceivedInvites")
+  sentInvites     SessionInvite[]   @relation("SentInvites")
+  teams           TeamMember[]
+  clubs           Club[]            @relation("ClubMembers")
+  conversations   Conversation[]    @relation("UserConversations")
 }
 
 model ClubJoinRequest {
   id        String        @id @default(uuid())
   userId    String
-  user      User          @relation(fields: [userId], references: [id])
   clubId    String
-  club      Club          @relation(fields: [clubId], references: [id])
   status    RequestStatus @default(PENDING)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  club      Club          @relation(fields: [clubId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
 
   @@unique([userId, clubId])
 }
 
 model Club {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  logo        String?
-  city        String?
-  address     String?
-  region      String?
-  department  String?
-  website     String?
-  sports      String[] @default([])
-  primaryColor String? @default("#FF5A1F")
+  id           String            @id @default(uuid())
+  name         String
+  description  String?
+  logo         String?
+  city         String?
+  address      String?
+  region       String?
+  department   String?
+  website      String?
+  sports       String[]          @default([])
+  primaryColor String?           @default("#FF5A1F")
   bannerImage  String?
   lat          Float?
   lng          Float?
-  schedule     String?  // Training sessions schedule
-  
-  ownerId     String   @unique
-  owner       User     @relation("ClubOwner", fields: [ownerId], references: [id])
-  
-  members     User[]   @relation("ClubMembers")
-  teams       Team[]
-  messages    Message[]
-  channels    Channel[]
-  events      Event[]
+  schedule     String?
+  ownerId      String            @unique
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  channels     Channel[]
+  owner        User              @relation("ClubOwner", fields: [ownerId], references: [id])
   joinRequests ClubJoinRequest[]
-  sessions    Session[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  events       Event[]
+  messages     Message[]
+  sessions     Session[]
+  teams        Team[]
+  members      User[]            @relation("ClubMembers")
 }
 
 model Channel {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
   clubId    String
-  club      Club     @relation(fields: [clubId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  club      Club      @relation(fields: [clubId], references: [id])
   messages  Message[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model Team {
-  id        String   @id @default(uuid())
+  id        String       @id @default(uuid())
   name      String
-  
   clubId    String
-  club      Club     @relation(fields: [clubId], references: [id])
-  
   coachId   String
-  
-  members   TeamMember[]
-  sessions  Session[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
   messages  Message[]
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  sessions  Session[]
+  club      Club         @relation(fields: [clubId], references: [id])
+  members   TeamMember[]
 }
 
 model TeamMember {
   teamId String
   userId String
-  
-  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@id([teamId, userId])
 }
 
 model Session {
-  id             String   @id @default(uuid())
+  id             String          @id @default(uuid())
   date           DateTime
   type           String
   description    String?
   duration       Int?
   targetDistance Float?
-  
   teamId         String?
-  team           Team?    @relation(fields: [teamId], references: [id])
-  
   userId         String?
-  user           User?    @relation("AthleteSessions", fields: [userId], references: [id])
-  
   coachId        String?
-  coach          User?    @relation("CoachSessions", fields: [coachId], references: [id])
-  
   clubId         String?
-  club           Club?    @relation(fields: [clubId], references: [id])
-  
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  club           Club?           @relation(fields: [clubId], references: [id])
+  coach          User?           @relation("CoachSessions", fields: [coachId], references: [id])
+  team           Team?           @relation(fields: [teamId], references: [id])
+  user           User?           @relation("AthleteSessions", fields: [userId], references: [id])
   invites        SessionInvite[]
-  
   result         SessionResult?
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
 }
 
 model SessionInvite {
-  id        String        @id @default(uuid())
-  sessionId String
-  session   Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
-  senderId  String
-  sender    User          @relation("SentInvites", fields: [senderId], references: [id], onDelete: Cascade)
-  
+  id         String        @id @default(uuid())
+  sessionId  String
+  senderId   String
   receiverId String
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
   receiver   User          @relation("ReceivedInvites", fields: [receiverId], references: [id], onDelete: Cascade)
-  
-  status    RequestStatus @default(PENDING)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  sender     User          @relation("SentInvites", fields: [senderId], references: [id], onDelete: Cascade)
+  session    Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, receiverId])
 }
@@ -182,33 +157,37 @@ model SessionResult {
   time           Int?
   rpe            Int?
   comment        String?
-  
   sessionId      String   @unique
-  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Message {
   id        String   @id @default(uuid())
   content   String
   type      String   @default("CHAT")
-  
-  senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
-  
-  clubId    String?
-  club      Club?    @relation(fields: [clubId], references: [id])
-  
-  channelId String?
-  channel   Channel? @relation(fields: [channelId], references: [id])
-  
-  teamId    String?
-  team      Team?    @relation(fields: [teamId], references: [id])
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  senderId       String
+  clubId         String?
+  channelId      String?
+  teamId         String?
+  conversationId String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  channel        Channel?      @relation(fields: [channelId], references: [id])
+  club           Club?         @relation(fields: [clubId], references: [id])
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  sender         User          @relation(fields: [senderId], references: [id])
+  team           Team?         @relation(fields: [teamId], references: [id])
+}
+
+model Conversation {
+  id            String    @id @default(uuid())
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  messages      Message[]
+  participants  User[]    @relation("UserConversations")
 }
 
 model Event {
@@ -217,10 +196,19 @@ model Event {
   description String?
   date        DateTime
   location    String?
-  
   clubId      String
-  club        Club     @relation(fields: [clubId], references: [id])
-  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  club        Club     @relation(fields: [clubId], references: [id])
+}
+
+enum Role {
+  COACH
+  ATHLETE
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

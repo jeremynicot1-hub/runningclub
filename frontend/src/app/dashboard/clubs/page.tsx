@@ -128,8 +128,8 @@ export default function ClubsHubPage() {
           <div style={{ maxWidth: 1200, margin: '0 auto', width: '100%' }}>
             
             <div style={{ marginBottom: 24 }}>
-              <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--ks-text-main)', marginBottom: 8 }}>Find Your Next Club</h1>
-              <p style={{ color: 'var(--ks-text-muted)', fontSize: 15 }}>Discover athletic communities near you or across France.</p>
+              <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--ks-text-main)', marginBottom: 8 }}>Trouvez votre prochain club</h1>
+              <p style={{ color: 'var(--ks-text-muted)', fontSize: 15 }}>Découvrez des communautés athlétiques proches de chez vous ou partout en France.</p>
             </div>
 
             {/* 1. New Premium Search Bar */}

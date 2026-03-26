@@ -18,8 +18,16 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     },
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const text = await res.text();
+    console.error(`API Error: ${res.status} ${res.statusText}`, text);
+    let errorMsg = `HTTP ${res.status}`;
+    try {
+      const err = JSON.parse(text);
+      errorMsg = err.error || errorMsg;
+    } catch (e) {
+      errorMsg = `Server error (not JSON): ${res.status}`;
+    }
+    throw new Error(errorMsg);
   }
   return res.json();
 }

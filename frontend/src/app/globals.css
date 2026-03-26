@@ -179,17 +179,21 @@
   .kinetic-content {
     flex: 1;
     overflow-y: auto;
-    padding: 32px;
+    padding: 64px 80px 64px 80px; /* Base padding */
     display: flex;
     justify-content: center;
+    background: #fcfcfc;
+    /* Offset centering to account for the 260px sidebar for perfect screen symmetry */
+    padding-right: 340px; 
   }
   .kinetic-grid {
     width: 100%;
-    max-width: 1100px;
+    max-width: 1200px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 32px;
+    grid-template-columns: minmax(600px, 1fr) 340px;
+    gap: 64px;
     align-items: start;
+    padding-bottom: 80px;
   }
 
   /* CARDS */
@@ -234,22 +238,51 @@
     transition: all 0.2s; cursor: pointer; padding: 10px 20px;
     border: none;
   }
-  .k-btn-primary { background: var(--ks-primary); color: white; }
-  .k-btn-primary:hover { background: var(--ks-primary-hover); }
+  .k-btn-primary { 
+    background: var(--ks-primary); 
+    color: white; 
+    box-shadow: 0 10px 20px rgba(192, 38, 49, 0.2);
+  }
+  .k-btn-primary:hover { 
+    background: var(--ks-primary-hover); 
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(192, 38, 49, 0.25);
+  }
   
   .k-btn-dark { background: #222; color: white; padding: 6px 14px; font-size: 13px; border-radius: 20px; }
   .k-btn-dark:hover { background: #000; }
 
+  /* INPUTS */
+  .k-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ks-text-main);
+    outline: none;
+    transition: all 0.2s;
+  }
+  .k-input:focus {
+    background: #fff;
+    border-color: var(--ks-primary);
+    box-shadow: 0 0 0 4px rgba(192, 38, 49, 0.08);
+  }
+
   /* WIDGETS */
   .k-widget {
     background: var(--ks-surface);
-    border-radius: 16px;
+    border-radius: 24px;
     padding: 24px;
-    box-shadow: var(--ks-shadow);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+    border: 1px solid rgba(0,0,0,0.04);
+    transition: all 0.3s ease;
   }
   .k-widget-title {
-    font-size: 15px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.05em; color: var(--ks-text-main); margin-bottom: 20px;
+    font-size: 14px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ks-text-main); margin-bottom: 24px;
   }
 
   /* AVATARS */
@@ -305,11 +338,18 @@
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.1);
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .hover-bg {
+    transition: background 0.2s ease;
+  }
+  .hover-bg:hover {
+    background: var(--ks-bg) !important;
   }
 }
 

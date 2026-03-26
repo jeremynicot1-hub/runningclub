@@ -11,6 +11,15 @@ interface User {
   lastName: string;
   clubId?: string | null;
   clubs?: any[];
+  bio?: string;
+  sport?: string;
+  city?: string;
+  address?: string;
+  license?: string;
+  pb5k?: string;
+  pb10k?: string;
+  pb21k?: string;
+  pb42k?: string;
 }
 
 interface AuthContextType {

@@ -74,31 +74,61 @@ export default function ClubMap({
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         
         <BoundsHandler clubs={clubs} onBoundsChange={onBoundsChange} />
 
         {clubs.map(p => {
           if (!p.lat || !p.lng) return null;
+          
+          const customIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `
+              <div style="
+                background-color: ${p.primaryColor || '#FF5A1F'};
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50% 50% 50% 0;
+                transform: rotate(-45deg);
+                border: 3px solid white;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+              ">
+                <div style="
+                  transform: rotate(45deg);
+                  color: white;
+                  font-weight: 900;
+                  font-size: 14px;
+                ">${p.name[0]}</div>
+              </div>
+            `,
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+          });
+
           return (
             <Marker 
               key={p.id} 
               position={[p.lat, p.lng]} 
-              icon={icon} 
+              icon={customIcon} 
             >
-              <Popup>
-                <div style={{ padding: 4, minWidth: 150 }}>
-                  <div style={{ fontWeight: 800, color: p.primaryColor || 'var(--ks-primary)', fontSize: 14 }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>📍 {p.city}</div>
+              <Popup className="kinetic-popup">
+                <div style={{ padding: 4, minWidth: 160 }}>
+                  <div style={{ fontWeight: 900, color: '#0f172a', fontSize: 16, marginBottom: 2 }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>📍 {p.city}</div>
                   <button 
                     onClick={() => onSelect?.(p)}
                     style={{ 
-                      fontSize: 11, color: 'white', background: 'var(--ks-primary)', border: 'none', 
-                      fontWeight: 700, marginTop: 10, display: 'block', padding: '6px 10px', borderRadius: 6, cursor: 'pointer', width: '100%' 
+                      fontSize: 12, color: 'white', background: p.primaryColor || 'var(--ks-primary)', border: 'none', 
+                      fontWeight: 800, marginTop: 14, display: 'block', padding: '10px 14px', borderRadius: 10, cursor: 'pointer', width: '100%',
+                      boxShadow: `0 4px 12px ${p.primaryColor}44`
                     }}
                   >
-                    Voir détails
+                    Voir le club
                   </button>
                 </div>
               </Popup>

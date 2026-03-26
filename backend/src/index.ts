@@ -12,6 +12,7 @@ import userRoutes from './routes/users.js';
 import chatRoutes from './routes/chat.js';
 import eventRoutes from './routes/events.js';
 import inviteRoutes from './routes/invites.js';
+import conversationRoutes from './routes/conversations.js';
 
 dotenv.config();
 
@@ -45,6 +46,18 @@ app.use('/api/users', userRoutes);
 app.use('/api/messages', chatRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/invites', inviteRoutes);
+app.use('/api/conversations', conversationRoutes);
+
+// 404 Handler
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled Error:', err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+});
 
 // WebSocket for realtime chat
 io.on('connection', (socket) => {

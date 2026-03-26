@@ -15,19 +15,19 @@ export default function ClubFeedPage() {
   useEffect(() => {
     if (id) {
       apiFetch<any>(`/api/clubs/${id}`).then(setClub).catch(console.error);
-      apiFetch<any[]>(`/api/chat/club/${id}?type=POST`).then(setPosts).catch(console.error);
+      apiFetch<any[]>(`/api/messages/club/${id}?type=POST`).then(setPosts).catch(console.error);
     }
   }, [id]);
 
   const handlePost = async () => {
     if (!postContent.trim()) return;
     try {
-      await apiFetch(`/api/chat/club/${id}`, {
+      await apiFetch(`/api/messages/club/${id}`, {
         method: 'POST',
         body: JSON.stringify({ content: postContent.trim(), type: 'POST' })
       });
       setPostContent('');
-      const newPosts = await apiFetch<any[]>(`/api/chat/club/${id}?type=POST`);
+      const newPosts = await apiFetch<any[]>(`/api/messages/club/${id}?type=POST`);
       setPosts(newPosts);
     } catch (err) {
       console.error(err);

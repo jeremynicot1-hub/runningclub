@@ -28,10 +28,10 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
     }
   }, [user, loading, router, id]);
 
-  if (loading || !user) return null;
-
   const [showMembers, setShowMembers] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+
+  if (loading || !user) return null;
 
   const tabs = [
     { name: 'Flux', href: `/clubs/${id}/feed` },
